@@ -7,8 +7,10 @@ from google.genai.types import HttpOptions, Part
 
 
 app = FastAPI()
-
 vertexai.init(project='playground-elly-kim-bda1')
+
+MAX_RETRIES=3
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,16 +43,21 @@ A. 구석기
 ```
 """
     
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            prompt,
-            Part.from_bytes(
-                data=image_bytes,
-                mime_type="image/jpeg"
-            ),
-        ],
-    )
+    for i in range(MAX_RETRIES):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents=[
+                    prompt,
+                    Part.from_bytes(
+                        data=image_bytes,
+                        mime_type="image/jpeg"
+                    ),
+                ],
+            )
+        except:
+            if (i + 1) == MAX_RETRIES:
+                return "FAILED"
     content = response.text.removeprefix("```markdown").removesuffix("```")
 
     prompt = f"""
@@ -69,14 +76,19 @@ A. 구석기
 유저의 자료:
 {content}
 """
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=[
-            prompt,
-        ],
-    )
-    quiz = response.text.removeprefix("```json").removesuffix("```")
-    return json.loads(quiz)["fill_in_the_blank_quiz"]
+    for i in range(MAX_RETRIES):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents=[
+                    prompt,
+                ],
+            )
+            quiz = response.text.removeprefix("```json").removesuffix("```")
+            return json.loads(quiz)["fill_in_the_blank_quiz"]
+        except:
+            if (i + 1) == MAX_RETRIES:
+                return "FAILED"
 
 @app.post("/quiz")
 async def generate_quiz(
