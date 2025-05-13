@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import vertexai
 from google import genai
 from google.genai.types import HttpOptions, Part
+from pydantic import BaseModel
 
 
 app = FastAPI()
@@ -17,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class FITBQuiz(BaseModel):
+    fill_in_the_blank_quiz: str
 
 def generate_fitb(image_bytes: bytes) -> str:
     client = genai.Client(
@@ -55,8 +59,10 @@ A. 구석기
                     ),
                 ],
             )
-        except:
+        except Exception as e:
             if (i + 1) == MAX_RETRIES:
+                print("Failed to extract text:", str(e))
+                print("Response:", response.text)
                 return "FAILED"
     content = response.text.removeprefix("```markdown").removesuffix("```")
 
@@ -66,7 +72,7 @@ A. 구석기
 아래의 내용을 읽고 출제될 가능성이 높은 중요한 단어에 '**중요한 단어**' 표시를 해줘.
 
 반환문 예시:
-## Output Example
+## Output Example(JSON)
 ```json
 {{
 "fill_in_the_blank_quiz":"2강. 구석기와 신석기\nA. 구석기\n1) 채집, 수렵으로 **이동** 생활을 했다.\n2) **가족**을 중심 단위로 생활했다.\n3) 동굴, 막집에서 살았으며, 대표적인 유적지로 **평양**, **전곡리**, **공주 석장리** 등이 있다.\n4) 대표적 도구로 **뗀석기**를 이용하였다.\n5) 무리 사회이자 **평등** 사회였다.\n6) 홍수아이(이곡리 유적)에서 **시신 매장** 풍습을 볼 수 있다."
@@ -83,11 +89,17 @@ A. 구석기
                 contents=[
                     prompt,
                 ],
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": FITBQuiz,
+                },
             )
-            quiz = response.text.removeprefix("```json").removesuffix("```")
+            quiz = response.text
             return json.loads(quiz)["fill_in_the_blank_quiz"]
-        except:
+        except Exception as e:
             if (i + 1) == MAX_RETRIES:
+                print("Failed to generate FITB quiz:", str(e))
+                print("Response:", quiz)
                 return "FAILED"
 
 @app.post("/quiz")
